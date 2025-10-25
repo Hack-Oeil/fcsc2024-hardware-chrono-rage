@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+
+<head lang="fr">
+    <meta charset="UTF-8">
+    <!--Page Title-->
+    <title>Hack-Oeil - Les CTFs de Cyrhades</title>
+    <!--Meta Keywords and Description-->
+    <meta name="keywords" content="">
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <link rel="shortcut icon" href="./assets/images/favicon.ico" title="Favicon" />
+    <link rel="stylesheet" href="./assets/css/style.css">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,300,600,700,800' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" href="./assets/css/github.min.css">
+    <script src="./assets/js/highlight.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Vérifie si la fenêtre est dans une iframe
+            if (window.self !== window.top) {
+                document.querySelectorAll('a').forEach((link) => {
+                    link.addEventListener('click', (event) => {
+                        const a = event.target.closest('a[href^="http"]');
+                        if (a) {
+                            event.preventDefault();
+                            window.parent.postMessage({
+                                type: "open-external",
+                                url: a.href
+                            }, "*");
+                        }
+                    });
+                });
+            }
+            // Active la coloration syntaxique :
+            if (window.hljs) {
+                hljs.highlightAll();
+            } else {
+                console.error("Highlight.js non chargé !");
+            }
+        });
+    </script>
+</head>
+
+<body>
+    <div id="wrapper">
+        <!--Main Content Area-->
+        <main id="content">
+            <!--Ctf-->
+            <section class="ctf scrollto">
+                <article class="row clearfix">
+                    <div class="col-1">
+                        <div class="section-heading">
+                            <h3>Challenge #419</h3>
+                            <h2 class="section-title">Chrono Rage</h2>
+                            <p>Votre ami a développé un petit démon local sur son serveur qui ouvre une socket en écoute
+                                sur <code>localhost</code> et effectue des actions privilégiées lorsque des clients s’y
+                                connectent
+                                et s’authentifient avec un PIN. Malheureusement, il s’est fait attaquer son serveur
+                                récemment, malgré tous les efforts qu’il a mis dans la sécurisation de son démon.
+                                <br /><br />
+                                Il vous fournit les sources de ce démon en Python : comme vous le verrez, pour sécuriser
+                                l’envoi du PIN sur la socket il utilise des clés de session AES tournantes. Il vous
+                                fournit aussi une capture <code>pcap</code> correspondant à l’activité suspecte d’un
+                                client local
+                                relevée grâce à son monitoring constant des connexions. Malheureusement, il a perdu la
+                                clé AES utilisée au moment de cette capture et ne peut donc vous la fournir. Enfin, il a
+                                évidemment caviardé le PIN dans les sources : vous n’avez a priori pas à connaître ce
+                                secret sensible !
+                                <br /><br />
+                                Saurez-vous l’aider en lui expliquant comment l’attaquant s’y est pris, et qu’il doit
+                                changer de PIN et corriger son code au plus vite ?
+                                <br /><br />
+                                <strong>Note :</strong> le format du flag est <code>FCSC{PIN}</code> où <code>PIN</code>
+                                est le <code>PIN</code> du serveur.
+                                <br />
+                                <img src="./assets/images/chrono_rage.png">
+                            </p>
+                            <h4>Fichiers à étudier</h4>
+                            <p>
+                                - chrono-rage.pcap<br />
+                                - chrono-rage-server.py
+                            </p>
+                            <pre><code class="language-python">import socket, sys, os
+from passlib.hash import scrypt
+from Crypto.Cipher import AES
+from Crypto.Util import Counter
+
+ref_password = "0"*4 # XXX: fake PIN, to be fixed
+allowed_charset = "0123456789"
+
+SCRYPT_ROUNDS = 14
+
+COMM_AES_KEY = b"\x00"*16 # XXX: fake key, to be fixed
+COMM_IV = 0
+
+def check_password(pwd):
+    if len(ref_password) != len(pwd):
+        return False 
+    for i in range(len(ref_password)):
+        if pwd[i] not in allowed_charset:
+            return False
+    for i in range(len(ref_password)):
+        a = scrypt.hash(ref_password[i].encode(), salt_size=0, rounds=SCRYPT_ROUNDS)
+        b = scrypt.hash(pwd[i].encode(), salt_size=0, rounds=SCRYPT_ROUNDS)
+        if a != b:
+            return False
+    return True
+
+def server():
+    global COMM_AES_KEY
+    global COMM_IV
+
+    host = "localhost"
+    port = 5000
+
+    server_socket = socket.socket()
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    server_socket.bind((host, port))
+
+    print("[+] Server listening ...")
+
+    server_socket.listen(1)
+    conn, address = server_socket.accept()  # accept new connection
+    print("[+] Connection from: " + str(address))
+
+    while True:
+        # Wait for the password (max 16 bytes) and decrypt it
+        password = conn.recv(16)
+        if not password:
+            conn.close()
+            sys.exit(-1)
+        # Decrypt and check
+        ctr = Counter.new(128, initial_value=COMM_IV)
+        aes = AES.new(COMM_AES_KEY, AES.MODE_CTR, counter=ctr)
+        COMM_IV += 1
+        password = aes.decrypt(password).decode()
+        if check_password(password) is True:
+            conn.send("OK".encode())
+            break
+        else:
+            conn.send("NOK".encode()) 
+
+    print("[+] Password OK! Goodbye ...")
+    conn.close()
+
+if __name__ == '__main__':
+    server()
+</code></pre>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="row clearfix">
+                    <div class="col-1">
+                        <div class="section-heading">
+                            <h3>FCSC 2024</h3>
+                            <h2 class="section-title">Hackropole</h2>
+                            <p class="section-subtitle">
+                                Lien officiel :
+                                <a target="_blank"
+                                    href="https://hackropole.fr/fr/challenges/hardware/fcsc2024-hardware-chrono-rage/">FCSC
+                                    2024 -
+                                    Chrono Rage
+                                </a>
+                                <br />
+                                Auteurs: rbe
+                            </p>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="row clearfix">
+                    <div class="col-1">
+                        <div class="section-heading">
+                            <h3>Apprentissage</h3>
+                            <h2 class="section-title">Documentations et Vidéos</h2>
+                            <p class="section-subtitle">
+                                Aucune documentation pour le moment
+                            </p>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="row clearfix">
+                    <div class="col-1">
+                        <div class="section-heading">
+                            <h3>Aide</h3>
+                            <h2 class="section-title">Conseils et indices</h2>
+                            <p class="section-subtitle">
+                                <a target="_blank"
+                                    href="https://discord.com/channels/1175764392307077120/1175764601716092948">Fil sur
+                                    le Discord</a>
+                            </p>
+                        </div>
+                    </div>
+                </article>
+            </section>
+            <!--End of Ctf-->
+        </main>
+        <!--End Main Content Area-->
+
+        <a id="scrollUp" href="#wrapper" style="position: fixed; z-index: 1000;"
+            aria-label="Remonter en haut de la page" title="Remonter en tête de site"></a>
+    </div>
+</body>
+
+</html>
